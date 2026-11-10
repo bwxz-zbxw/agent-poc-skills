@@ -64,7 +64,7 @@
 
 ## 占位符清单
 
-安装后，请将下列占位符替换为你环境的真实值：
+机器 IP、SSH 账号、权重路径、工作目录集中在 `skills/poc-capability/capabilities.yaml` 顶部的 `env:` 段填写；其余占位符在对应文件里替换为真实值：
 
 | 占位符 | 含义 |
 | --- | --- |
@@ -75,8 +75,10 @@
 | `<AISBENCH_REPO>` | aisbench 工具仓库路径 |
 | `<BENCHMARK_PATH>` / `<DATASET_PATH>` | 基准 / 数据集路径 |
 | `<USER>` | 运行账号名 |
+| `<SSH_USER>` | SSH 登录账号（在 `capabilities.yaml` 顶部 `env:` 段填写） |
 | `<NIC>` | 网卡名 |
-| `<CONTAINER>` | 推理服务容器名 |
+
+> 容器名不再用占位符，改为确定性命名 `poc-<部署目录名>`（例 `poc-dsv4-flash-0731-3p1d`），详见 `poc-benchmark` 的「容器命名与复用约定」：多人协作时同一「模型 × 部署方式」算出同一个容器名，可识别并复用已建容器、避免重复创建。
 
 ## 更新同步
 
@@ -96,7 +98,12 @@ git pull
 git pull && ./install.sh          # Windows 改用 .\install.ps1
 ```
 
-> install 脚本每次会先删掉旧的同名 skill 目录再写入，所以「重跑」天然就是覆盖更新，不会残留旧文件。
+> install 脚本采用**增量复制**：只更新变化的文件；下面这些**本地数据文件会被保留**，重跑不会抹掉你的个人改动：
+> - `poc-capability/capabilities.yaml`
+> - `poc-capability/deployments/`（整目录，含部署脚本与机器信息）
+> - `poc-case/cases/`（整目录，含案例索引）
+>
+> 请放心在这些文件里填你自己的机器 IP、SSH 账号、权重路径等真实信息，`git pull` 后重跑脚本也不会覆盖它们。
 >
 > 想长期跟进更新，请优先用 `git clone` + 一键脚本安装，避免「手动复制」那种无法 `git pull` 的方式。
 

@@ -23,7 +23,7 @@ topology:
 # 服务化与镜像版本
 image:
   vllm_version: "v0.27.1"
-  container: "vllm-ascend-<CONTAINER>"
+  container: "poc-dsv4-flash-0731-3p1d"     # 容器名 = poc-<部署目录名>，见 poc-benchmark 命名约定
   image_tag: ""           # TODO: 镜像 ID 运行时传参（docker_run.sh $1），未在脚本写死
 
 weights: "<WEIGHTS_PATH>"

@@ -55,6 +55,35 @@ if [ ! -d "$SRC_DIR" ]; then
   exit 1
 fi
 
+# ---- 本地数据文件保护：更新时不覆盖这些路径，保留用户本地改动 ----
+PRESERVE_DIRS=("poc-capability/deployments" "poc-case/cases")
+PRESERVE_FILES=("poc-capability/capabilities.yaml")
+
+should_preserve() {
+  local rel="$1"
+  for d in "${PRESERVE_DIRS[@]}"; do
+    if [[ "$rel" == "$d" || "$rel" == "$d/"* ]]; then return 0; fi
+  done
+  for f in "${PRESERVE_FILES[@]}"; do
+    if [[ "$rel" == "$f" ]]; then return 0; fi
+  done
+  return 1
+}
+
+copy_incremental() {
+  local src="$1" dst="$2"
+  mkdir -p "$dst"
+  while IFS= read -r -d '' src_file; do
+    local rel="${src_file#"$src"}"
+    if should_preserve "$rel" && [ -e "$dst/$rel" ]; then
+      echo "  保留本地文件: $rel"
+      continue
+    fi
+    mkdir -p "$(dirname "$dst/$rel")"
+    cp "$src_file" "$dst/$rel"
+  done < <(find "$src" -type f -print0)
+}
+
 install_to() {
   local dest="$1" platform="$2"
   if [ -z "$dest" ]; then
@@ -66,10 +95,14 @@ install_to() {
   for skill in "$SRC_DIR"/*/; do
     local name
     name="$(basename "$skill")"
-    rm -rf "$dest/$name"
     if [ "$LINK" -eq 1 ]; then
+      rm -rf "$dest/$name"
       ln -s "$skill" "$dest/$name"
+    elif [ -e "$dest/$name" ]; then
+      # 更新：逐文件覆盖，命中「不覆盖清单」的本地文件保留
+      copy_incremental "$skill" "$dest/$name"
     else
+      # 首次安装：整目录复制（含清单模板，供首次填写）
       cp -R "$skill" "$dest/$name"
     fi
     count=$((count + 1))

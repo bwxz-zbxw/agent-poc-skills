@@ -1,4 +1,4 @@
-# POC Skills 一键安装脚本（Windows PowerShell，跨平台：TRAE / OpenCode / Claude / Agents / DSH）
+﻿# POC Skills 一键安装脚本（Windows PowerShell，跨平台：TRAE / OpenCode / Claude / Agents / DSH）
 param(
   [string]$Platform = "all",
   [switch]$Symlink
@@ -43,6 +43,37 @@ if (-not (Test-Path $SrcDir)) {
   exit 1
 }
 
+# ---- 本地数据文件保护：更新时不覆盖这些路径，保留用户本地改动 ----
+# 相对 skills/<skill>/ 的路径；PreserveDirs 整目录跳过，PreserveFiles 单文件跳过。
+$PreserveDirs  = @("poc-capability\deployments", "poc-case\cases")
+$PreserveFiles = @("poc-capability\capabilities.yaml")
+
+function Test-Preserve {
+  param([string]$Rel)
+  foreach ($d in $PreserveDirs) {
+    if ($Rel -eq $d -or $Rel.StartsWith($d + "\")) { return $true }
+  }
+  foreach ($f in $PreserveFiles) {
+    if ($Rel -eq $f) { return $true }
+  }
+  return $false
+}
+
+function Copy-SkillIncremental {
+  param([string]$Src, [string]$Dst)
+  New-Item -ItemType Directory -Force -Path $Dst | Out-Null
+  Get-ChildItem $Src -Recurse -File | ForEach-Object {
+    $rel = $_.FullName.Substring($Src.Length).TrimStart('\', '/')
+    $dstFile = Join-Path $Dst $rel
+    if ((Test-Preserve $rel) -and (Test-Path $dstFile)) {
+      Write-Host "  保留本地文件: $rel"
+      return
+    }
+    New-Item -ItemType Directory -Force -Path (Split-Path $dstFile -Parent) | Out-Null
+    Copy-Item $_.FullName $dstFile -Force
+  }
+}
+
 function Install-To {
   param([string]$Dest, [string]$Name)
   if ([string]::IsNullOrEmpty($Dest)) {
@@ -54,10 +85,14 @@ function Install-To {
   Get-ChildItem $SrcDir -Directory | ForEach-Object {
     $skillName = $_.Name
     $target = Join-Path $Dest $skillName
-    if (Test-Path $target) { Remove-Item $target -Recurse -Force }
     if ($Symlink) {
+      if (Test-Path $target) { Remove-Item $target -Recurse -Force }
       New-Item -ItemType SymbolicLink -Path $target -Target $_.FullName | Out-Null
+    } elseif (Test-Path $target) {
+      # 更新：逐文件覆盖，命中「不覆盖清单」的本地文件保留
+      Copy-SkillIncremental $_.FullName $target
     } else {
+      # 首次安装：整目录复制（含清单模板，供首次填写）
       Copy-Item -Path $_.FullName -Destination $target -Recurse -Force
     }
     $count++

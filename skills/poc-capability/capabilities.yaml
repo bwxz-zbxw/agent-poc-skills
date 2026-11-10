@@ -1,12 +1,22 @@
 # POC 能力清单：记录「可测的模型 × 部署方式」、可用测试工具、部署脚本位置
 # 部署脚本 + 镜像版本见 deployments/<模型-部署>/ 目录
 
+# ===== 客户环境信息（必填：安装后替换为真实值）=====
+# 能力确认时会校验下列信息是否已填，缺失/仍为 <...> 则向用户反问补齐。
+# deploy.yaml 中的 <HOST_31>/<HOST_32>/<WEIGHTS_PATH> 分别对应这里的 host_31/host_32/weights。
+env:
+  host_31: "<HOST_31>"      # 机器 31 的 IP
+  host_32: "<HOST_32>"      # 机器 32 的 IP
+  ssh_user: "<SSH_USER>"    # SSH 登录账号（跨机部署脚本用）
+  weights: "<WEIGHTS_PATH>" # 模型权重目录（tokenizer 所在）
+  workdir: "<WORKDIR>"      # 部署 / 测试工作目录
+
 capabilities:
   - model: "DeepSeek-V4-Flash-0731"
     deployment: "PD分离"
     mode: "3p1d"                                   # 3 Prefill + 1 Decode
     deploy_dir: "./deployments/dsv4-flash-0731-3p1d/"
-    image: { vllm_version: "v0.27.1", container: "vllm-ascend-<CONTAINER>", image_tag: "" }
+    image: { vllm_version: "v0.27.1", container: "poc-dsv4-flash-0731-3p1d", image_tag: "" }   # 容器名 = poc-<部署目录名>，见 poc-benchmark 命名约定
     served_model_name: "dsv4_0905"
     tools:
       - skill: "poc-aisbench"
