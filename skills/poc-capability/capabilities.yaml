@@ -1,0 +1,27 @@
+# POC 能力清单：记录「可测的模型 × 部署方式」、可用测试工具、部署脚本位置
+# 部署脚本 + 镜像版本见 deployments/<模型-部署>/ 目录
+
+capabilities:
+  - model: "DeepSeek-V4-Flash-0731"
+    deployment: "PD分离"
+    mode: "3p1d"                                   # 3 Prefill + 1 Decode
+    deploy_dir: "./deployments/dsv4-flash-0731-3p1d/"
+    image: { vllm_version: "v0.27.1", container: "vllm-ascend-<CONTAINER>", image_tag: "" }
+    served_model_name: "dsv4_0905"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+        tool_dir: "./tools/aisbench_auto_tools_prefix/"
+      - skill: "poc-vllmbench"
+        modes: [bench]
+      - skill: "poc-evalscope"
+        modes: [longbench]                         # 纯文本模型；mmbench(多模态)需另配服务
+    note: "双机 16 卡 3P1D（P1/P2 同机 · P3/D 同机），served-name=dsv4_0905；纯文本，多模态需另配"
+
+  # 预留：新模型 / 新部署方式
+  # - model: "待定"
+  #   deployment: "待定"
+  #   mode: ""
+  #   deploy_dir: ""
+  #   tools: []
+  #   note: ""

@@ -1,0 +1,24 @@
+# 往期 case 元数据索引（仅索引；真实结果文件在用户侧，result_file 指向它）
+# 新增 case 时登记一条。以下为占位示例。
+
+cases:
+  - case_id: "case_16k_J128_20261012"
+    model: "DeepSeek-V4-Flash"          # 占位示例
+    deployment: "PD分离"
+    scenario: { input_len: 16384, output_len: 1024, repeat_rate: 0 }
+    tool: "aisbench"
+    best_params: { concurrency: 128, request_rate: 2.0 }   # 种子参数（最优档）
+    metrics: { ttft_avg: 4.2, tpot_avg: 31, hit_rate: null, throughput: 3120 }
+    date: "2026-10-12"
+    result_file: "./cases/results/case_16k_J128.json"      # 真实结果（用户侧）
+
+  # 预留：更多 case
+  # - case_id: ""
+  #   model: ""
+  #   deployment: ""
+  #   scenario: { input_len: 0, output_len: 0, repeat_rate: 0 }
+  #   tool: ""
+  #   best_params: {}
+  #   metrics: {}
+  #   date: ""
+  #   result_file: ""
