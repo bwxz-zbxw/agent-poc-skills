@@ -60,11 +60,12 @@ function Test-Preserve {
 }
 
 function Copy-SkillIncremental {
-  param([string]$Src, [string]$Dst)
+  param([string]$Src, [string]$Dst, [string]$SkillName)
   New-Item -ItemType Directory -Force -Path $Dst | Out-Null
   Get-ChildItem $Src -Recurse -File | ForEach-Object {
-    $rel = $_.FullName.Substring($Src.Length).TrimStart('\', '/')
-    $dstFile = Join-Path $Dst $rel
+    $skillRel = $_.FullName.Substring($Src.Length).TrimStart('\', '/')
+    $rel = "$SkillName\$skillRel"
+    $dstFile = Join-Path $Dst $skillRel
     if ((Test-Preserve $rel) -and (Test-Path $dstFile)) {
       Write-Host "  保留本地文件: $rel"
       return
@@ -90,7 +91,7 @@ function Install-To {
       New-Item -ItemType SymbolicLink -Path $target -Target $_.FullName | Out-Null
     } elseif (Test-Path $target) {
       # 更新：逐文件覆盖，命中「不覆盖清单」的本地文件保留
-      Copy-SkillIncremental $_.FullName $target
+      Copy-SkillIncremental $_.FullName $target $skillName
     } else {
       # 首次安装：整目录复制（含清单模板，供首次填写）
       Copy-Item -Path $_.FullName -Destination $target -Recurse -Force

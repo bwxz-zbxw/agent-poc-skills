@@ -71,12 +71,13 @@ should_preserve() {
 }
 
 copy_incremental() {
-  local src="$1" dst="$2"
+  local src="$1" dst="$2" skill_name="$3"
   mkdir -p "$dst"
   while IFS= read -r -d '' src_file; do
     local rel="${src_file#"$src"}"
-    if should_preserve "$rel" && [ -e "$dst/$rel" ]; then
-      echo "  保留本地文件: $rel"
+    local full_rel="${skill_name}/${rel}"
+    if should_preserve "$full_rel" && [ -e "$dst/$rel" ]; then
+      echo "  保留本地文件: $full_rel"
       continue
     fi
     mkdir -p "$(dirname "$dst/$rel")"
@@ -100,7 +101,7 @@ install_to() {
       ln -s "$skill" "$dest/$name"
     elif [ -e "$dest/$name" ]; then
       # 更新：逐文件覆盖，命中「不覆盖清单」的本地文件保留
-      copy_incremental "$skill" "$dest/$name"
+      copy_incremental "$skill" "$dest/$name" "$name"
     else
       # 首次安装：整目录复制（含清单模板，供首次填写）
       cp -R "$skill" "$dest/$name"
