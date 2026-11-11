@@ -1,0 +1,56 @@
+# DeepSeek-V4-Flash-0731 · 1p1d 部署元数据（由历史 POC 记录归纳，已脱敏）
+# 占位符：<HOST_x>=机器 IP，<NIC>=通信网卡，<WEIGHTS_PATH>=权重目录（运行时替换）
+
+model: "DeepSeek-V4-Flash-0731"
+served_model_name: "dsv"
+deployment: "1p1d"
+hardware: "650E"
+cards: "8"
+p_cards: "4"
+d_cards: "4"
+
+topology:
+  type: "PD 分离（P/D 分节点脚本）"
+  instances:
+    - { name: "P", role: "kv_producer", port: "9000", kv_port: "30100", engine_id: "1", script: "start_p.sh" }
+    - { name: "D", role: "kv_consumer", port: "9001", kv_port: "30100", engine_id: "1", script: "start_d.sh" }
+  note: "多实例/多机时对外统一入口需前置代理或 LB；完整原始脚本见 start_all.sh"
+
+image:
+  registry_image: "quay.io/ascend/vllm-ascend:nightly-releases-v0.27.1rc-a5-openeuler"
+  vllm_version: "0.27.1"
+  container: "poc-dsv4-flash-0731-1p1d"
+
+weights: "<WEIGHTS_PATH>"
+
+scripts:
+  all: ["start_all.sh"]
+  prefill: ["start_p.sh"]
+  decode: ["start_d.sh"]
+
+key_config:
+  max_model_len: "1048576"
+  max_num_batched_tokens: "4096"
+  block_size: "32"
+  gpu_memory_utilization: "0.85"
+  data_parallel_size_p: "4"
+  tensor_parallel_size_p: "1"
+  max_num_seqs_p: "32"
+  data_parallel_size_d: "4"
+  tensor_parallel_size_d: "1"
+  max_num_seqs_d: "64"
+  kv_connector: "MooncakeHybridConnector"
+  speculative_method: "dspark"
+  speculative_tokens: "5"
+  enable_prefix_caching_p: false
+  enable_prefix_caching_d: false
+  enable_expert_parallel: true
+  async_scheduling: true
+  enforce_eager: true
+
+# 测试相关约定（供性能测试子 skill 使用）
+test_convention:
+  served_model_name: "dsv"
+  tokenizer: "<WEIGHTS_PATH>"
+  multimodal: false        # 历史记录均为纯文本压测
+  history_rows: 65          # 该组合在历史表格中出现次数（可信度参考）

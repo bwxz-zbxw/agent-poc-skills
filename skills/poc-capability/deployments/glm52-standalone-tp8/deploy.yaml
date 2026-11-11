@@ -1,0 +1,45 @@
+# GLM-5.2 · standalone 部署元数据（由历史 POC 记录归纳，已脱敏）
+# 占位符：<HOST_x>=机器 IP，<NIC>=通信网卡，<WEIGHTS_PATH>=权重目录（运行时替换）
+
+model: "GLM-5.2"
+served_model_name: "glm"
+deployment: "standalone"
+hardware: "650E"
+cards: "8"
+
+topology:
+  type: "单机单实例"
+  instances:
+    - { name: "S1", role: "hybrid", port: "9888", script: "start_all.sh" }
+
+image:
+  registry_image: "0.23.0-a5"
+  vllm_version: "0.23.0"
+  container: "poc-glm52-standalone-tp8"
+
+weights: "<WEIGHTS_PATH>"
+
+scripts:
+  all: ["start_all.sh"]
+
+key_config:
+  max_num_batched_tokens: "16384"
+  gpu_memory_utilization: "0.95"
+  data_parallel_size_p: "1"
+  tensor_parallel_size_p: "8"
+  max_num_seqs_p: "128"
+  data_parallel_size_d: "1"
+  tensor_parallel_size_d: "8"
+  max_num_seqs_d: "128"
+  quantization: "ascend"
+  enable_prefix_caching_p: false
+  enable_expert_parallel: true
+  async_scheduling: false
+  enforce_eager: false
+
+# 测试相关约定（供性能测试子 skill 使用）
+test_convention:
+  served_model_name: "glm"
+  tokenizer: "<WEIGHTS_PATH>"
+  multimodal: false        # 历史记录均为纯文本压测
+  history_rows: 14          # 该组合在历史表格中出现次数（可信度参考）

@@ -1,0 +1,44 @@
+# Qwen3.5-35B · standalone 部署元数据（由历史 POC 记录归纳，已脱敏）
+# 占位符：<HOST_x>=机器 IP，<NIC>=通信网卡，<WEIGHTS_PATH>=权重目录（运行时替换）
+
+model: "Qwen3.5-35B"
+served_model_name: "Qwen3.5-35B-A3B"
+deployment: "standalone"
+hardware: "650E"
+cards: "2"
+
+topology:
+  type: "单机单实例"
+  instances:
+    - { name: "S1", role: "hybrid", port: "8010", script: "start_all.sh" }
+
+image:
+  registry_image: "quay.io/ascend/vllm-ascend:v0.30.0-a5-openeuler"
+  vllm_version: "0.30.0"
+  container: "poc-qwen35-35b-standalone"
+
+weights: "<WEIGHTS_PATH>"
+
+scripts:
+  all: ["start_all.sh"]
+
+key_config:
+  max_num_batched_tokens: "4096"
+  gpu_memory_utilization: "0.85"
+  tensor_parallel_size_p: "1"
+  max_num_seqs_p: "32"
+  tensor_parallel_size_d: "1"
+  max_num_seqs_d: "32"
+  speculative_method: "qwen3_5_mtp"
+  speculative_tokens: "3"
+  enable_prefix_caching_p: false
+  enable_expert_parallel: false
+  async_scheduling: false
+  enforce_eager: false
+
+# 测试相关约定（供性能测试子 skill 使用）
+test_convention:
+  served_model_name: "Qwen3.5-35B-A3B"
+  tokenizer: "<WEIGHTS_PATH>"
+  multimodal: false        # 历史记录均为纯文本压测
+  history_rows: 2          # 该组合在历史表格中出现次数（可信度参考）

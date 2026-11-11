@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+source /root/.bashrc
+export PROMETHEUS_MULTIPROC_DIR=/dev/shm/vllm_metrics && mkdir -p $PROMETHEUS_MULTIPROC_DIR
+export HCCL_DFS_CONFIG="task_exception:off,inconsistent_check:off"
+
+unset ftp_proxy
+unset https_proxy
+unset http_proxy
+unset HCCL_INTRA_ROCE_ENABLE
+
+# 自动获取配置
+nic_name="<NIC>"
+local_ip="<HOST_A>"
+
+# 以下环境变量无需修改
+export HCCL_IF_IP=<HOST_A>
+export GLOO_SOCKET_IFNAME=$nic_name
+export TP_SOCKET_IFNAME=$nic_name
+export HCCL_SOCKET_IFNAME=$nic_name
+
+export ASCEND_LOCAL_COMM_RES='{"version":"1.3"}'
+export HCCL_ALGO=level0:fullmesh
+
+export VLLM_RPC_TIMEOUT=3600000
+export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=30000
+export HCCL_EXEC_TIMEOUT=20000
+export HCCL_CONNECT_TIMEOUT=1800
+export HCCL_BUFFSIZE=1200
+export VLLM_ENGINE_READY_TIMEOUT_S=24000
+
+export OMP_PROC_BIND=false
+export OMP_NUM_THREADS=10
+export PYTORCH_NPU_ALLOC_CONF=expandable_segments:True
+
+export TASK_QUEUE_ENABLE=1
+export VLLM_USE_FASTOKENS=1
+export DYNAMIC_EPLB="true"
+#export EXPERT_MAP_RECORD="true"
+
+export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+vllm serve <WEIGHTS_PATH> \
+  --host <HOST_A> \
+  --port 8010 \
+  --data-parallel-size 8 \
+  --tensor-parallel-size 1 \
+  --max_model_len 262144 \
+  --max-num-batched-tokens 256 \
+  --served-model-name glm25 \
+  --gpu-memory-utilization 0.92 \
+  --enable-expert-parallel \
+  --async-scheduling \
+  --max-num-seqs 64 \
+  --enable-prefix-caching \
+  --trust-remote-code \
+  --compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY"}' \
+  --speculative-config '{"num_speculative_tokens": 3,"method": "deepseek_mtp", "enforce_eager":true}' \
+  --hf-overrides '{"use_index_cache": true, "index_topk_freq": 4}' \
+  --quantization ascend \
+  --enable-auto-tool-choice \
+  --tool-call-parser glm47 \
+  --reasoning-parser glm45 \
+  --kv-transfer-config \
+    '{"kv_connector": "MooncakeConnectorV1",
+    "kv_role": "kv_consumer",
+    "kv_port": "30300",
+    "engine_id": "3",
+    "kv_connector_extra_config": {
+                "prefill": {
+                        "dp_size": 1,
+                        "tp_size": 8
+                },
+                "decode": {
+                        "dp_size": 8,
+                        "tp_size": 1
+                }
+        }
+    }' \
+  --kv-cache-dtype fp8 \
+  --attention_config.indexer_kv_dtype fp8 \
+  --additional_config '{"enable_cpu_binding": "True","ascend_compilation_config":{"enable_static_kernel":true, "enable_super_kernel": false}, "recompute_scheduler_enable": "True", "multistream_overlap_shared_expert": "True","finegrained_tp_config": {"lmhead_tensor_parallel_size":8}, "enable_mlapo": true}'
+
+
+Proxy：
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+
+python3 load_balance_proxy_server_example.py \
+  --port 2999 \
+  --host <HOST_B> \
+  --prefiller-hosts \
+    <HOST_B> \
+  --prefiller-ports \
+    8010 \
+  --decoder-hosts \
+    <HOST_A> \
+  --decoder-ports \
+    8010

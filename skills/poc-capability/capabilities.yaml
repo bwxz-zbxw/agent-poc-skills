@@ -1,32 +1,316 @@
 # POC 能力清单：记录「可测的模型 × 部署方式」、可用测试工具、部署脚本位置
 # 部署脚本 + 镜像版本见 deployments/<模型-部署>/ 目录
+#
+# ⚠️ 本文件随仓库提交（不含任何单位/机器/人员信息）；
+#    真实机器 IP、SSH 账号、权重路径在安装后由使用者填 env 段，勿提交。
 
-# ===== 客户环境信息（必填：安装后替换为真实值）=====
+# ===== 运行环境信息（必填：安装后替换为真实值）=====
 # 能力确认时会校验下列信息是否已填，缺失/仍为 <...> 则向用户反问补齐。
-# deploy.yaml 中的 <HOST_31>/<HOST_32>/<WEIGHTS_PATH> 分别对应这里的 host_31/host_32/weights。
+# deploy.yaml 中的 <HOST_x>/<WEIGHTS_PATH>/<NIC> 分别对应这里的 host_31/host_32/weights/nic。
 env:
   host_31: "<HOST_31>"      # 机器 31 的 IP
   host_32: "<HOST_32>"      # 机器 32 的 IP
   ssh_user: "<SSH_USER>"    # SSH 登录账号（跨机部署脚本用）
   weights: "<WEIGHTS_PATH>" # 模型权重目录（tokenizer 所在）
   workdir: "<WORKDIR>"      # 部署 / 测试工作目录
+  nic: "<NIC>"              # 多机通信网卡名（HCCL/GLOO 用）
 
 capabilities:
+
   - model: "DeepSeek-V4-Flash-0731"
     deployment: "PD分离"
-    mode: "3p1d"                                   # 3 Prefill + 1 Decode
+    mode: "3p1d"
+    hardware: "650E"
+    cards: "16"
+    p_cards: "12"
+    d_cards: "4"
     deploy_dir: "./deployments/dsv4-flash-0731-3p1d/"
-    image: { vllm_version: "v0.27.1", container: "poc-dsv4-flash-0731-3p1d", image_tag: "" }   # 容器名 = poc-<部署目录名>，见 poc-benchmark 命名约定
+    image: { vllm_version: "v0.27.1", container: "poc-dsv4-flash-0731-3p1d", image_tag: "" }
     served_model_name: "dsv4_0905"
     tools:
       - skill: "poc-aisbench"
         modes: [prefix_hitrate, concurrency]
-        tool_dir: "./tools/aisbench_auto_tools_prefix/"
       - skill: "poc-vllmbench"
         modes: [bench]
       - skill: "poc-evalscope"
-        modes: [longbench]                         # 纯文本模型；mmbench(多模态)需另配服务
-    note: "双机 16 卡 3P1D（P1/P2 同机 · P3/D 同机），served-name=dsv4_0905；纯文本，多模态需另配"
+        modes: [longbench]
+    note: "历史记录 128 行；测试框架：aisbench×217, evalscope+random×56, vllm bench×19；纯文本压测"
+
+  - model: "DeepSeek-V4-Flash-0731"
+    deployment: "PD分离"
+    mode: "1p1d"
+    hardware: "650E"
+    cards: "8"
+    p_cards: "4"
+    d_cards: "4"
+    deploy_dir: "./deployments/dsv4-flash-0731-1p1d/"
+    image: { vllm_version: "0.27.1", container: "poc-dsv4-flash-0731-1p1d", image_tag: "quay.io/ascend/vllm-ascend:nightly-releases-v0.27.1rc-a5-openeuler" }
+    served_model_name: "dsv"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+      - skill: "poc-vllmbench"
+        modes: [bench]
+      - skill: "poc-evalscope"
+        modes: [longbench]
+    note: "历史记录 65 行；测试框架：aisbench×217, evalscope+random×56, vllm bench×19；纯文本压测"
+
+  - model: "DeepSeek-V4-Flash-0731"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "4"
+    deploy_dir: "./deployments/dsv4-flash-0731-standalone-dp4/"
+    image: { vllm_version: "0.27.1rc1", container: "poc-dsv4-flash-0731-standalone-dp4", image_tag: "0.27.1rc1-a5" }
+    served_model_name: "dsv4"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+      - skill: "poc-vllmbench"
+        modes: [bench]
+      - skill: "poc-evalscope"
+        modes: [longbench]
+    note: "历史记录 23 行；测试框架：aisbench×217, evalscope+random×56, vllm bench×19；纯文本压测"
+
+  - model: "DeepSeek-V4-Flash-0731"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "8"
+    deploy_dir: "./deployments/dsv4-flash-0731-standalone-tp8/"
+    image: { vllm_version: "0.30.0rc2", container: "poc-dsv4-flash-0731-standalone-tp8", image_tag: "quay.io/ascend/vllm-ascend:v0.30.0rc2-a5-openeuler" }
+    served_model_name: "dsv4"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+      - skill: "poc-vllmbench"
+        modes: [bench]
+      - skill: "poc-evalscope"
+        modes: [longbench]
+    note: "历史记录 11 行；测试框架：aisbench×217, evalscope+random×56, vllm bench×19；纯文本压测"
+
+  - model: "DeepSeek-V4-Flash"
+    deployment: "PD分离"
+    mode: "1p1d"
+    hardware: "650E"
+    cards: "8"
+    p_cards: "4"
+    d_cards: "4"
+    deploy_dir: "./deployments/dsv4-flash-1p1d/"
+    image: { vllm_version: "", container: "poc-dsv4-flash-1p1d", image_tag: "vllm-ascend:dev-26.2.0.day20260918-A5-py311-openEuler24.03-lts-aarch64" }
+    served_model_name: "dsv"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+    note: "历史记录 8 行；测试框架：aisbench×8；纯文本压测"
+
+  - model: "GLM-5.2"
+    deployment: "PD分离"
+    mode: "1p1d"
+    hardware: "650E"
+    cards: "16"
+    p_cards: "8"
+    d_cards: "8"
+    deploy_dir: "./deployments/glm52-1p1d/"
+    image: { vllm_version: "", container: "poc-glm52-1p1d", image_tag: "vllm-ascend:dev-26.1.0.day20260817-A5-py311-openEuler24.03-lts-aarch64" }
+    served_model_name: "glm52"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+      - skill: "poc-vllmbench"
+        modes: [bench]
+      - skill: "poc-evalscope"
+        modes: [longbench]
+    note: "历史记录 100 行；测试框架：aisbench×95, evalscope+random×37, vllm bench×4；纯文本压测"
+
+  - model: "GLM-5.2"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "8"
+    deploy_dir: "./deployments/glm52-standalone-tp8/"
+    image: { vllm_version: "0.23.0", container: "poc-glm52-standalone-tp8", image_tag: "0.23.0-a5" }
+    served_model_name: "glm"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+      - skill: "poc-vllmbench"
+        modes: [bench]
+      - skill: "poc-evalscope"
+        modes: [longbench]
+    note: "历史记录 14 行；测试框架：aisbench×95, evalscope+random×37, vllm bench×4；纯文本压测"
+
+  - model: "GLM-5.3"
+    deployment: "PD分离"
+    mode: "1p1d"
+    hardware: "650E"
+    cards: "16"
+    p_cards: "8"
+    d_cards: "8"
+    deploy_dir: "./deployments/glm53-1p1d/"
+    image: { vllm_version: "", container: "poc-glm53-1p1d", image_tag: "vllm-ascend:dev-26.2.0.B106-day20261015-A5-py311-openEuler24.03-lts-aarch64" }
+    served_model_name: "glm25"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+    note: "历史记录 43 行；测试框架：aisbench×58；纯文本压测"
+
+  - model: "GLM-5.3"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "8"
+    deploy_dir: "./deployments/glm53-standalone-tp8/"
+    image: { vllm_version: "", container: "poc-glm53-standalone-tp8", image_tag: "vllm-ascend:dev-26.2.0.B106-day20261015-A5-py311-openEuler24.03-lts-aarch64" }
+    served_model_name: "glm"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+    note: "历史记录 3 行；测试框架：aisbench×58；纯文本压测"
+
+  - model: "Qwen3.8-27B"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "2"
+    deploy_dir: "./deployments/qwen38-27b-standalone-tp2/"
+    image: { vllm_version: "0.30.0rc2", container: "poc-qwen38-27b-standalone-tp2", image_tag: "quay.io/ascend/vllm-ascend:v0.30.0rc2-a5-openeuler" }
+    served_model_name: "qwen3.8"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+      - skill: "poc-vllmbench"
+        modes: [bench]
+    note: "历史记录 81 行；测试框架：aisbench×81, vllm bench×4；纯文本压测"
+
+  - model: "Qwen3.8-27B"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "4"
+    deploy_dir: "./deployments/qwen38-27b-standalone-dp4/"
+    image: { vllm_version: "0.30.0rc2", container: "poc-qwen38-27b-standalone-dp4", image_tag: "quay.io/ascend/vllm-ascend:v0.30.0rc2-a5-openeuler" }
+    served_model_name: "qwen3.6"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+      - skill: "poc-vllmbench"
+        modes: [bench]
+    note: "历史记录 4 行；测试框架：aisbench×81, vllm bench×4；纯文本压测"
+
+  - model: "Qwen3.6-27B"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "2"
+    deploy_dir: "./deployments/qwen36-27b-standalone/"
+    image: { vllm_version: "0.27.1", container: "poc-qwen36-27b-standalone", image_tag: "quay.io/ascend/vllm-ascend:nightly-releases-v0.27.1rc-a5-openeuler" }
+    served_model_name: "qwen3.6"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+    note: "历史记录 10 行；测试框架：aisbench×15；纯文本压测"
+
+  - model: "Qwen3.6-27B"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "1"
+    deploy_dir: "./deployments/qwen36-27b-standalone-1card/"
+    image: { vllm_version: "", container: "poc-qwen36-27b-standalone-1card", image_tag: "vllm-ascend:dev-26.2.0.day20261013-A5-py311-openEuler24.03-lts-aarch64" }
+    served_model_name: "qwen3.6"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+    note: "历史记录 5 行；测试框架：aisbench×15；纯文本压测"
+
+  - model: "Qwen3.6-35B-A3B"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "2"
+    deploy_dir: "./deployments/qwen36-35b-a3b-standalone/"
+    image: { vllm_version: "0.30.0rc2", container: "poc-qwen36-35b-a3b-standalone", image_tag: "0.30.0rc2-a5" }
+    served_model_name: "qwen3.6"
+    tools:
+      - skill: "poc-evalscope"
+        modes: [longbench]
+    note: "历史记录 19 行；测试框架：evalscope+random×19；纯文本压测"
+
+  - model: "Qwen3.5-397B-A17B"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "8"
+    deploy_dir: "./deployments/qwen35-397b-a17b-standalone/"
+    image: { vllm_version: "0.23.0", container: "poc-qwen35-397b-a17b-standalone", image_tag: "vllm-ascend:v0.23.0-a5-openeuler" }
+    served_model_name: "qwen35"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+      - skill: "poc-vllmbench"
+        modes: [bench]
+      - skill: "poc-evalscope"
+        modes: [longbench]
+    note: "历史记录 10 行；测试框架：evalscope+random×4, aisbench×3, vllm bench×3；纯文本压测"
+
+  - model: "Qwen3.5-35B"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "2"
+    deploy_dir: "./deployments/qwen35-35b-standalone/"
+    image: { vllm_version: "0.30.0", container: "poc-qwen35-35b-standalone", image_tag: "quay.io/ascend/vllm-ascend:v0.30.0-a5-openeuler" }
+    served_model_name: "Qwen3.5-35B-A3B"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+    note: "历史记录 2 行；测试框架：aisbench×2；纯文本压测"
+
+  - model: "DeepSeek-V4-Pro"
+    deployment: "独立部署"
+    mode: "standalone"
+    hardware: "650E"
+    cards: "16"
+    deploy_dir: "./deployments/dsv4-pro-dp2tp8/"
+    image: { vllm_version: "", container: "poc-dsv4-pro-dp2tp8", image_tag: "vllm-ascend:dev-26.1.0.day20260817-A5-py311-openEuler24.03-lts-aarch64" }
+    served_model_name: "dsv4_pro"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+    note: "历史记录 11 行；测试框架：aisbench×11；纯文本压测"
+
+  - model: "DeepSeek-V4.1-Flash-1017"
+    deployment: "PD分离"
+    mode: "1p1d"
+    hardware: "650E"
+    cards: "16"
+    p_cards: "8"
+    d_cards: "8"
+    deploy_dir: "./deployments/dsv41-flash-1017-1p1d/"
+    image: { vllm_version: "", container: "poc-dsv41-flash-1017-1p1d", image_tag: "vllm-ascend:dev-26.2.0.day20261013-A5-py311-openEuler24.03-lts-aarch64" }
+    served_model_name: "dsv41"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+      - skill: "poc-vllmbench"
+        modes: [bench]
+    note: "历史记录 7 行；测试框架：aisbench×22, vllm bench×1；纯文本压测"
+
+  - model: "Minimax-M3"
+    deployment: "PD分离"
+    mode: "1p1d"
+    hardware: "650E"
+    cards: "16"
+    p_cards: "8"
+    d_cards: "8"
+    deploy_dir: "./deployments/minimax-m3-1p1d/"
+    image: { vllm_version: "0.30.0", container: "poc-minimax-m3-1p1d", image_tag: "quay.io/ascend/vllm-ascend:v0.30.0-a5" }
+    served_model_name: "minimax-m3"
+    tools:
+      - skill: "poc-aisbench"
+        modes: [prefix_hitrate, concurrency]
+    note: "历史记录 6 行；测试框架：aisbench×6；纯文本压测"
 
   # 预留：新模型 / 新部署方式
   # - model: "待定"

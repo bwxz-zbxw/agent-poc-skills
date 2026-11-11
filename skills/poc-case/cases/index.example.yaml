@@ -1,0 +1,51 @@
+# 历史 case 库 —— 【可提交的占位示例 / schema 文档】
+#
+# 数据分两层，仓库里只提交本文件（结构与示例），真实数据留在本地：
+#   第1层  index.yaml            ~20 KB，每个「模型+部署」一条 + 场景档位数组（含种子并发）→ 总是先读
+#   第2层  library/<model>__<dep>.yaml   1~20 KB/个，完整并发扫档曲线 → 按需只读一个
+# 两者都被 .gitignore 排除，不会推到公网。
+#
+# 读取纪律：先 index 判 hit/near/none → 只有要核对曲线/p90/单卡TPS 时才读对应 library 文件。
+#          不要整个读 library/（100KB+）。
+#
+# 内容边界（写库时遵守）：
+#   - 只存技术参数与指标；不写任何可识别到具体单位或个人的信息（名称、代号、编号一律不写）
+#   - 人名 / 工号 / SSH 账号 / 机器 IP / 内网机器名 / 权重路径 → 不写（权重路径见 capabilities.yaml 的 env.weights）
+#   - 截图 / 原始 log / json → 留在本地结果目录，不写入本库
+#   - 落盘门禁：先用敏感词（单位/项目名称、人名、IP、工号）反查确认零命中
+
+meta:
+  hardware: "<HARDWARE>"          # 如 650E
+  source: "<SOURCE>"              # 写"历史性能表格"即可
+  buckets: 1
+  points: 2
+
+index:
+# 每个「模型+部署」一条；buckets 下每行一个场景档位，**定长数组**，列序如下：
+# [in, out, rr, slo_ttft_s, slo_tpot_ms, tool, n, seed_c, seed_tps, passed]
+#   in/out      输入/输出长度（token）
+#   rr          prefix 命中目标比例 0~1
+#   slo_ttft_s  TTFT 门槛（秒），无则 null
+#   slo_tpot_ms TPOT 门槛（毫秒），无则 null
+#   tool        aisbench / vllm bench / evalscope+random
+#   n           该场景的历史并发档位数
+#   seed_c      达标档中的最大并发（= 阶段③ 的种子并发；全不达标时为吞吐最高点）
+#   seed_tps    该档单卡输出吞吐
+#   passed      该场景是否存在达标档（true/false/null=当时未登记门槛）
+- model: "DeepSeek-V4-Flash-0731"
+  dep: dsv4-flash-0731-3p1d
+  file: library/deepseek-v4-flash-0731__dsv4-flash-0731-3p1d.yaml
+  buckets:
+  - [16384, 1024, 0.9, 10.0, 20.0, aisbench, 2, 128, 195.0, true]
+
+# library/<model>__<dep>.yaml 的对应结构（同样只本地存在）：
+#
+#   columns: [c, k, req, ttft, ttft90, tpot, tpot90, thr, tps, hit, ok]
+#   buckets:
+#     - scenario: { in: 16384, out: 1024, rr: 0.9 }
+#       tool: aisbench
+#       slo: { ttft_s: 10.0, tpot_ms: 20.0 }
+#       seed: { c: 128, req: 0.0, ttft: 4200.0, tpot: 18.5, thr: 3120.0, tps: 195.0, passed: true }
+#       points:
+#         - [64, 256, 0.0, 2100.0, 2600.0, 16.1, 18.0, 1650.0, 103.1, 0.89, true]
+#         - [128, 512, 0.0, 4200.0, 5100.0, 18.5, 21.0, 3120.0, 195.0, 0.89, true]

@@ -11,3 +11,21 @@ desktop.ini
 
 # 本地安装产生的临时文件
 *.log
+
+# ===== 隐私数据（严禁提交到公网仓库）=====
+# 真实历史 case 库：含客户经验数据，仅留本地。可提交的占位版本是 index.example.yaml
+skills/poc-case/cases/index.yaml
+# 明细库（第2层，按需读），同样只留本地
+skills/poc-case/cases/library/
+# case 结果文件（截图 / 原始 log / json），一律留在本地
+skills/poc-case/cases/results/
+skills/poc-case/cases/**/*.png
+skills/poc-case/cases/**/*.jpg
+skills/poc-case/cases/**/*.log
+
+# ===== 真实环境信息（安装后由使用者填写，勿提交）=====
+# 机器 IP / SSH 账号 / 权重路径 / 网卡名写在 capabilities.yaml 的 env 段；
+# 若把 deploy.yaml 里的 <HOST_x>/<WEIGHTS_PATH> 替换成了真实值，下面这些本地副本也不要提交
+*.local.yaml
+*.local.yml
+deploy.local.yaml

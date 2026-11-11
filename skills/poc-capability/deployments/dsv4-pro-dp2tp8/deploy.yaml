@@ -1,0 +1,48 @@
+# DeepSeek-V4-Pro · standalone 部署元数据（由历史 POC 记录归纳，已脱敏）
+# 占位符：<HOST_x>=机器 IP，<NIC>=通信网卡，<WEIGHTS_PATH>=权重目录（运行时替换）
+
+model: "DeepSeek-V4-Pro"
+served_model_name: "dsv4_pro"
+deployment: "standalone"
+hardware: "650E"
+cards: "16"
+
+topology:
+  type: "单机单实例"
+  instances:
+    - { name: "S1", role: "hybrid", port: "8555", script: "start_all.sh" }
+
+image:
+  registry_image: "vllm-ascend:dev-26.1.0.day20260817-A5-py311-openEuler24.03-lts-aarch64"
+  vllm_version: null
+  container: "poc-dsv4-pro-dp2tp8"
+
+weights: "<WEIGHTS_PATH>"
+
+scripts:
+  all: ["start_all.sh"]
+
+key_config:
+  max_model_len: "200000"
+  max_num_batched_tokens: "8192"
+  block_size: "128"
+  gpu_memory_utilization: "0.94"
+  data_parallel_size_p: "2"
+  tensor_parallel_size_p: "8"
+  max_num_seqs_p: "40"
+  data_parallel_size_d: "2"
+  tensor_parallel_size_d: "8"
+  max_num_seqs_d: "40"
+  speculative_method: "mtp"
+  speculative_tokens: "3"
+  enable_prefix_caching_p: true
+  enable_expert_parallel: true
+  async_scheduling: true
+  enforce_eager: false
+
+# 测试相关约定（供性能测试子 skill 使用）
+test_convention:
+  served_model_name: "dsv4_pro"
+  tokenizer: "<WEIGHTS_PATH>"
+  multimodal: false        # 历史记录均为纯文本压测
+  history_rows: 11          # 该组合在历史表格中出现次数（可信度参考）

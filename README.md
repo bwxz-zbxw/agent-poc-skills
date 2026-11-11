@@ -111,6 +111,40 @@ git pull && ./install.sh          # Windows 改用 .\install.ps1
 
 以 `poc-orchestrator` 为入口：对 Agent 说「跑 POC 性能测试，我要测 <模型> + <部署方式> 的 <测试项>」，编排器会按五阶段调度各模块。若要直接压测，也可单独调用 `poc-aisbench`。
 
+## 隐私与数据分层
+
+仓库里**不存**任何真实单位/项目名称、人名/工号、机器 IP、内网机器名、内部 registry 域名。数据分两层：
+
+| 层 | 文件 | 是否入库 | 内容 |
+| --- | --- | --- | --- |
+| 能力清单（可共享） | `poc-capability/capabilities.yaml` | ✅ 入库 | 19 种「模型 × 部署方式」组合，卡数/工具/镜像版本，全部占位符化 |
+| 部署脚本（可共享） | `poc-capability/deployments/<模型-部署>/` | ✅ 入库 | `start_all.sh` / `start_p.sh` / `start_d.sh` / `deploy.yaml`，IP·网卡·权重路径均为 `<...>` |
+| 案例库（**仅本地**） | `poc-case/cases/index.yaml` | ❌ `.gitignore` 排除 | 历史压测经验（不含任何可识别信息），**泄露风险最高，绝不外推** |
+| 案例库模板（可共享） | `poc-case/cases/index.example.yaml` | ✅ 入库 | 仅结构与占位示例，兼作字段说明文档 |
+
+`poc-case` 读取顺序：`index.yaml` 存在就用它；不存在则回退 `index.example.yaml`（纯示例，通常判 `none`）。
+
+新增案例或部署脚本时的**落盘门禁**：先用敏感词（单位/项目名称 / 人名 / IP / 工号）反查一遍，确认零命中后才能写入。
+
+## 当前能力覆盖（19 种模型 × 部署方式组合）
+
+| 模型 | 部署方式 |
+| --- | --- |
+| DeepSeek-V4-Flash-0731 | PD分离 3p1d(16卡) / 1p1d(8卡) / 独立 dp4(4卡) / 独立 tp8(8卡) |
+| DeepSeek-V4-Flash | PD分离 1p1d(8卡) |
+| DeepSeek-V4.1-Flash-1017 | PD分离 1p1d(16卡) |
+| DeepSeek-V4-Pro | 独立 dp2+tp8(16卡) |
+| GLM-5.2 | PD分离 1p1d(16卡) / 独立 tp8(8卡) |
+| GLM-5.3 | PD分离 1p1d(16卡) / 独立 tp8(8卡) |
+| Qwen3.8-27B | 独立 tp2(2卡) / 独立 dp4(4卡) |
+| Qwen3.6-27B | 独立 tp2(2卡) / 独立 tp1(1卡) |
+| Qwen3.6-35B-A3B | 独立 tp2(2卡) |
+| Qwen3.5-397B-A17B | 独立 dp4+tp2(8卡) |
+| Qwen3.5-35B | 独立(2卡) |
+| Minimax-M3 | PD分离 1p1d(16卡) |
+
+硬件基线均为 650E；全部为 VLLM(vllm-ascend) 部署，历史记录均为纯文本压测。
+
 ## 许可
 
 待定（发布前确认）。

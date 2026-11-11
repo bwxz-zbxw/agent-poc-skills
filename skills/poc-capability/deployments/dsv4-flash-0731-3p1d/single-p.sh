@@ -11,7 +11,7 @@ unset HCCL_INTRA_ROCE_ENABLE
 nic_name="<NIC>"
 local_ip="<HOST_32>"
 
-#nic_name=eth2
+#nic_name=<NIC>
 #local_ip=<HOST_EXT>
 
 node0_ip="<HOST_32>"

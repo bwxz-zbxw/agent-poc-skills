@@ -1,0 +1,55 @@
+# Minimax-M3 · 1p1d 部署元数据（由历史 POC 记录归纳，已脱敏）
+# 占位符：<HOST_x>=机器 IP，<NIC>=通信网卡，<WEIGHTS_PATH>=权重目录（运行时替换）
+
+model: "Minimax-M3"
+served_model_name: "minimax-m3"
+deployment: "1p1d"
+hardware: "650E"
+cards: "16"
+p_cards: "8"
+d_cards: "8"
+
+topology:
+  type: "PD 分离（P/D 分节点脚本）"
+  instances:
+    - { name: "P", role: "kv_producer", port: "31050", kv_port: "30000", engine_id: "0", script: "start_p.sh" }
+    - { name: "D", role: "kv_consumer", port: "31060", kv_port: "26900", engine_id: "1", script: "start_d.sh" }
+  note: "多实例/多机时对外统一入口需前置代理或 LB；完整原始脚本见 start_all.sh"
+
+image:
+  registry_image: "quay.io/ascend/vllm-ascend:v0.30.0-a5"
+  vllm_version: "0.30.0"
+  container: "poc-minimax-m3-1p1d"
+
+weights: "<WEIGHTS_PATH>"
+
+scripts:
+  all: ["start_all.sh"]
+  prefill: ["start_p.sh"]
+  decode: ["start_d.sh"]
+
+key_config:
+  max_num_batched_tokens: "32768"
+  gpu_memory_utilization: "0.95"
+  data_parallel_size_p: "2"
+  tensor_parallel_size_p: "4"
+  max_num_seqs_p: "128"
+  data_parallel_size_d: "2"
+  tensor_parallel_size_d: "4"
+  max_num_seqs_d: "128"
+  quantization: "mxfp8"
+  kv_connector: "MooncakeConnectorV1"
+  speculative_method: "eagle3"
+  speculative_tokens: "3"
+  enable_prefix_caching_p: true
+  enable_prefix_caching_d: false
+  enable_expert_parallel: true
+  async_scheduling: false
+  enforce_eager: true
+
+# 测试相关约定（供性能测试子 skill 使用）
+test_convention:
+  served_model_name: "minimax-m3"
+  tokenizer: "<WEIGHTS_PATH>"
+  multimodal: false        # 历史记录均为纯文本压测
+  history_rows: 6          # 该组合在历史表格中出现次数（可信度参考）
