@@ -64,7 +64,7 @@
 
 ## 占位符清单
 
-机器 IP、SSH 账号、权重路径、工作目录集中在 `skills/poc-capability/capabilities.yaml` 顶部的 `env:` 段填写；其余占位符在对应文件里替换为真实值：
+机器 IP、SSH 账号、权重路径、工作目录、通信网卡集中在 `skills/poc-orchestrator/env.local.yaml` 的 `env:` 段填写（首次安装由 `env.example.yaml` 自动生成；该文件 gitignore、安装不覆盖）；其余占位符在对应文件里替换为真实值：
 
 | 占位符 | 含义 |
 | --- | --- |
@@ -75,8 +75,9 @@
 | `<AISBENCH_REPO>` | aisbench 工具仓库路径 |
 | `<BENCHMARK_PATH>` / `<DATASET_PATH>` | 基准 / 数据集路径 |
 | `<USER>` | 运行账号名 |
-| `<SSH_USER>` | SSH 登录账号（在 `capabilities.yaml` 顶部 `env:` 段填写） |
-| `<NIC>` | 网卡名 |
+| `<SSH_USER>` | SSH 登录账号（在 `poc-orchestrator/env.local.yaml` 的 `env:` 段填写） |
+| `<NIC>` | 网卡名（同上） |
+| `<INTERNAL_REGISTRY>` | 内部镜像仓库地址（同上，`env.registry`） |
 
 > 容器名不再用占位符，改为确定性命名 `poc-<部署目录名>`（例 `poc-dsv4-flash-0731-3p1d`），详见 `poc-benchmark` 的「容器命名与复用约定」：多人协作时同一「模型 × 部署方式」算出同一个容器名，可识别并复用已建容器、避免重复创建。
 
@@ -98,12 +99,16 @@ git pull
 git pull && ./install.sh          # Windows 改用 .\install.ps1
 ```
 
-> install 脚本采用**增量复制**：只更新变化的文件；下面这些**本地数据文件会被保留**，重跑不会抹掉你的个人改动：
-> - `poc-capability/capabilities.yaml`
-> - `poc-capability/deployments/`（整目录，含部署脚本与机器信息）
-> - `poc-case/cases/`（整目录，含案例索引）
+> **覆盖策略（两类，按"是不是你的私有数据"划分）**
 >
-> 请放心在这些文件里填你自己的机器 IP、SSH 账号、权重路径等真实信息，`git pull` 后重跑脚本也不会覆盖它们。
+> | 类别 | 路径 | 更新行为 |
+> | --- | --- | --- |
+> | 🔄 **仓库托管** | `poc-capability/capabilities.yaml`、`poc-capability/deployments/`、其余全部 skill | **整目录替换**：与仓库完全一致，仓库里新增/修改/删除的部署脚本都会同步生效 |
+> | 🔒 **本地私有** | `poc-orchestrator/env.local.yaml` | **永不覆盖**：你的机器 IP / SSH 账号 / 权重路径 / 网卡都在这里 |
+> | 🔒 **本地数据** | `poc-case/cases/index.yaml`、`poc-case/cases/library/` | **永不覆盖**：你的历史案例库 |
+>
+> 也就是说：**想新增可测模型或改服务化脚本 → 改仓库并提交**（属共享知识，不该只留在你本机）；
+> **机器信息 → 只写 `env.local.yaml`**（属私有配置，不进仓库、不被覆盖）。
 >
 > 想长期跟进更新，请优先用 `git clone` + 一键脚本安装，避免「手动复制」那种无法 `git pull` 的方式。
 
@@ -111,20 +116,20 @@ git pull && ./install.sh          # Windows 改用 .\install.ps1
 
 以 `poc-orchestrator` 为入口：对 Agent 说「跑 POC 性能测试，我要测 <模型> + <部署方式> 的 <测试项>」，编排器会按五阶段调度各模块。若要直接压测，也可单独调用 `poc-aisbench`。
 
-## 隐私与数据分层
+## 数据分层
 
-仓库里**不存**任何真实单位/项目名称、人名/工号、机器 IP、内网机器名、内部 registry 域名。数据分两层：
+仓库里**不存**任何真实单位/项目名称、人名/工号、机器 IP、内网机器名、内部 registry 域名。数据分两类：
 
-| 层 | 文件 | 是否入库 | 内容 |
+| 类别 | 路径 | 是否入库 | 内容 |
 | --- | --- | --- | --- |
-| 能力清单（可共享） | `poc-capability/capabilities.yaml` | ✅ 入库 | 19 种「模型 × 部署方式」组合，卡数/工具/镜像版本，全部占位符化 |
-| 部署脚本（可共享） | `poc-capability/deployments/<模型-部署>/` | ✅ 入库 | `start_all.sh` / `start_p.sh` / `start_d.sh` / `deploy.yaml`，IP·网卡·权重路径均为 `<...>` |
-| 案例库（**仅本地**） | `poc-case/cases/index.yaml` | ❌ `.gitignore` 排除 | 历史压测经验（不含任何可识别信息），**泄露风险最高，绝不外推** |
-| 案例库模板（可共享） | `poc-case/cases/index.example.yaml` | ✅ 入库 | 仅结构与占位示例，兼作字段说明文档 |
+| 能力清单（共享） | `poc-capability/capabilities.yaml` | ✅ 入库 | 19 种「模型 × 部署方式」组合，卡数/工具/镜像版本，全部占位符化 |
+| 部署脚本（共享） | `poc-capability/deployments/<模型-部署>/` | ✅ 入库 | `start_all.sh` / `start_p.sh` / `start_d.sh` / `deploy.yaml`，IP·网卡·权重路径均为 `<...>` |
+| 环境信息（本地） | `poc-orchestrator/env.local.yaml` | ❌ `.gitignore` | 机器 IP / SSH 账号 / 权重路径 / 网卡 / 镜像仓库 |
+| 案例库（本地） | `poc-case/cases/` | ❌ `.gitignore`（整个目录） | 历史压测经验，`index.yaml` + `library/` |
 
-`poc-case` 读取顺序：`index.yaml` 存在就用它；不存在则回退 `index.example.yaml`（纯示例，通常判 `none`）。
+`poc-case/cases/` 是**整目录忽略**：目录内任何文件（含将来新增的）默认都不入库，无需再补规则。该目录缺失时 `poc-case` 直接判 `none`，格式说明见 `poc-case/SKILL.md`。
 
-新增案例或部署脚本时的**落盘门禁**：先用敏感词（单位/项目名称 / 人名 / IP / 工号）反查一遍，确认零命中后才能写入。
+新增案例或部署脚本时的**落盘门禁**：先用敏感词（单位/项目名称 / 人名 / IP / 工号）反查一遍，确认零命中后再写入。
 
 ## 当前能力覆盖（19 种模型 × 部署方式组合）
 

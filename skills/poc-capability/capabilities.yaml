@@ -1,19 +1,16 @@
 # POC 能力清单：记录「可测的模型 × 部署方式」、可用测试工具、部署脚本位置
 # 部署脚本 + 镜像版本见 deployments/<模型-部署>/ 目录
 #
-# ⚠️ 本文件随仓库提交（不含任何单位/机器/人员信息）；
-#    真实机器 IP、SSH 账号、权重路径在安装后由使用者填 env 段，勿提交。
-
-# ===== 运行环境信息（必填：安装后替换为真实值）=====
-# 能力确认时会校验下列信息是否已填，缺失/仍为 <...> 则向用户反问补齐。
-# deploy.yaml 中的 <HOST_x>/<WEIGHTS_PATH>/<NIC> 分别对应这里的 host_31/host_32/weights/nic。
-env:
-  host_31: "<HOST_31>"      # 机器 31 的 IP
-  host_32: "<HOST_32>"      # 机器 32 的 IP
-  ssh_user: "<SSH_USER>"    # SSH 登录账号（跨机部署脚本用）
-  weights: "<WEIGHTS_PATH>" # 模型权重目录（tokenizer 所在）
-  workdir: "<WORKDIR>"      # 部署 / 测试工作目录
-  nic: "<NIC>"              # 多机通信网卡名（HCCL/GLOO 用）
+# 📦 本文件与 deployments/ 都是**仓库托管**内容：随仓库更新，安装脚本会强制同步覆盖。
+#    想新增/修改可测模型与部署脚本 → 改这里并提交仓库，不要在本地改。
+#
+# 🐳 镜像 tag：`quay.io/ascend/vllm-ascend:<tag>` 为**公开仓库**，可直接拉取；
+#    少数 `vllm-ascend:dev-*` 是内部构建，外部拉不到，需换成可获取的等价 tag。
+#
+# 🔒 运行环境信息（机器 IP / SSH 账号 / 权重路径 / 网卡 / 镜像仓库）**不在此文件**，
+#    统一放在 ../poc-orchestrator/env.local.yaml（本地私有，gitignore，安装不覆盖）；
+#    模板见 ../poc-orchestrator/env.example.yaml。
+#    deploy.yaml 里的 <HOST_x>/<WEIGHTS_PATH>/<NIC>/<INTERNAL_REGISTRY> 均从该文件取值。
 
 capabilities:
 
@@ -61,7 +58,7 @@ capabilities:
     hardware: "650E"
     cards: "4"
     deploy_dir: "./deployments/dsv4-flash-0731-standalone-dp4/"
-    image: { vllm_version: "0.27.1rc1", container: "poc-dsv4-flash-0731-standalone-dp4", image_tag: "0.27.1rc1-a5" }
+    image: { vllm_version: "0.27.1rc1", container: "poc-dsv4-flash-0731-standalone-dp4", image_tag: "quay.io/ascend/vllm-ascend:v0.27.1rc1-a5" }
     served_model_name: "dsv4"
     tools:
       - skill: "poc-aisbench"
@@ -129,7 +126,7 @@ capabilities:
     hardware: "650E"
     cards: "8"
     deploy_dir: "./deployments/glm52-standalone-tp8/"
-    image: { vllm_version: "0.23.0", container: "poc-glm52-standalone-tp8", image_tag: "0.23.0-a5" }
+    image: { vllm_version: "0.23.0", container: "poc-glm52-standalone-tp8", image_tag: "quay.io/ascend/vllm-ascend:v0.23.0-a5" }
     served_model_name: "glm"
     tools:
       - skill: "poc-aisbench"
@@ -230,7 +227,7 @@ capabilities:
     hardware: "650E"
     cards: "2"
     deploy_dir: "./deployments/qwen36-35b-a3b-standalone/"
-    image: { vllm_version: "0.30.0rc2", container: "poc-qwen36-35b-a3b-standalone", image_tag: "0.30.0rc2-a5" }
+    image: { vllm_version: "0.30.0rc2", container: "poc-qwen36-35b-a3b-standalone", image_tag: "quay.io/ascend/vllm-ascend:v0.30.0rc2-a5" }
     served_model_name: "qwen3.6"
     tools:
       - skill: "poc-evalscope"
@@ -243,7 +240,7 @@ capabilities:
     hardware: "650E"
     cards: "8"
     deploy_dir: "./deployments/qwen35-397b-a17b-standalone/"
-    image: { vllm_version: "0.23.0", container: "poc-qwen35-397b-a17b-standalone", image_tag: "vllm-ascend:v0.23.0-a5-openeuler" }
+    image: { vllm_version: "0.23.0", container: "poc-qwen35-397b-a17b-standalone", image_tag: "quay.io/ascend/vllm-ascend:v0.23.0-a5-openeuler" }
     served_model_name: "qwen35"
     tools:
       - skill: "poc-aisbench"

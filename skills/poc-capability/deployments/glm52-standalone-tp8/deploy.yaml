@@ -13,7 +13,7 @@ topology:
     - { name: "S1", role: "hybrid", port: "9888", script: "start_all.sh" }
 
 image:
-  registry_image: "0.23.0-a5"
+  registry_image: "quay.io/ascend/vllm-ascend:v0.23.0-a5"
   vllm_version: "0.23.0"
   container: "poc-glm52-standalone-tp8"
 

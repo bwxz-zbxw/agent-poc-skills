@@ -12,20 +12,17 @@ desktop.ini
 # 本地安装产生的临时文件
 *.log
 
-# ===== 隐私数据（严禁提交到公网仓库）=====
-# 真实历史 case 库：含客户经验数据，仅留本地。可提交的占位版本是 index.example.yaml
-skills/poc-case/cases/index.yaml
-# 明细库（第2层，按需读），同样只留本地
-skills/poc-case/cases/library/
-# case 结果文件（截图 / 原始 log / json），一律留在本地
-skills/poc-case/cases/results/
-skills/poc-case/cases/**/*.png
-skills/poc-case/cases/**/*.jpg
-skills/poc-case/cases/**/*.log
+# ===== 本地数据（严禁提交）=====
+# 案例库：整目录忽略 —— 目录内任何文件（index.yaml / library/ / 将来新增的）默认都不入库，
+# 不需要为每个新文件补规则。格式说明见 skills/poc-case/SKILL.md。
+skills/poc-case/cases/
 
-# ===== 真实环境信息（安装后由使用者填写，勿提交）=====
-# 机器 IP / SSH 账号 / 权重路径 / 网卡名写在 capabilities.yaml 的 env 段；
-# 若把 deploy.yaml 里的 <HOST_x>/<WEIGHTS_PATH> 替换成了真实值，下面这些本地副本也不要提交
+# ===== 真实环境信息（本地私有：gitignore + 安装不覆盖）=====
+# 机器 IP / SSH 账号 / 权重路径 / 网卡 / 镜像仓库统一写在 poc-orchestrator/env.local.yaml
+# 模板是 skills/poc-orchestrator/env.example.yaml（随仓库提交，只含占位符）
+skills/poc-orchestrator/env.local.yaml
+
+# 兜底：任何 *.local.yaml 都不提交（含把 deploy.yaml 改成真值的本地副本）
 *.local.yaml
 *.local.yml
 deploy.local.yaml

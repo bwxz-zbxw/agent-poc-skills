@@ -43,10 +43,16 @@ if (-not (Test-Path $SrcDir)) {
   exit 1
 }
 
-# ---- 本地数据文件保护：更新时不覆盖这些路径，保留用户本地改动 ----
-# 相对 skills/<skill>/ 的路径；PreserveDirs 整目录跳过，PreserveFiles 单文件跳过。
-$PreserveDirs  = @("poc-capability\deployments", "poc-case\cases")
-$PreserveFiles = @("poc-capability\capabilities.yaml")
+# ---- 覆盖策略 ----
+# 【仓库托管】除下面两份本地数据外，其余全部强制同步（整目录替换，含删除仓库里已移除的文件）：
+#   - poc-capability/capabilities.yaml + deployments/  → 新增模型/部署脚本靠 git pull 生效
+# 【本地数据，安装时绝不覆盖】
+#   - poc-orchestrator/env.local.yaml → 机器 IP / SSH 账号 / 权重路径 / 网卡 等私有配置
+#   - poc-case/cases/index.yaml + cases/library/ → 历史案例库
+# 仅这两个 skill 走「增量复制 + 保护」；其余走「整目录替换」。
+$IncrementalSkills = @("poc-case", "poc-orchestrator")
+$PreserveFiles = @("poc-case\cases\index.yaml", "poc-orchestrator\env.local.yaml")
+$PreserveDirs  = @("poc-case\cases\library")
 
 function Test-Preserve {
   param([string]$Rel)
@@ -62,16 +68,30 @@ function Test-Preserve {
 function Copy-SkillIncremental {
   param([string]$Src, [string]$Dst, [string]$SkillName)
   New-Item -ItemType Directory -Force -Path $Dst | Out-Null
+  $kept = 0
   Get-ChildItem $Src -Recurse -File | ForEach-Object {
     $skillRel = $_.FullName.Substring($Src.Length).TrimStart('\', '/')
     $rel = "$SkillName\$skillRel"
     $dstFile = Join-Path $Dst $skillRel
     if ((Test-Preserve $rel) -and (Test-Path $dstFile)) {
-      Write-Host "  保留本地文件: $rel"
+      $kept++
       return
     }
     New-Item -ItemType Directory -Force -Path (Split-Path $dstFile -Parent) | Out-Null
     Copy-Item $_.FullName $dstFile -Force
+  }
+  if ($kept -gt 0) { Write-Host "  保留本地数据 $kept 个文件" }
+}
+
+# 首次安装或本地配置缺失时，用模板生成 env.local.yaml
+function Initialize-LocalEnv {
+  param([string]$Dest)
+  if ([string]::IsNullOrEmpty($Dest)) { return }
+  $local   = Join-Path $Dest "poc-orchestrator\env.local.yaml"
+  $example = Join-Path $Dest "poc-orchestrator\env.example.yaml"
+  if ((-not (Test-Path $local)) -and (Test-Path $example)) {
+    Copy-Item $example $local -Force
+    Write-Host "  已生成 poc-orchestrator\env.local.yaml（请填入真实机器信息；该文件不会被更新覆盖）"
   }
 }
 
@@ -89,15 +109,17 @@ function Install-To {
     if ($Symlink) {
       if (Test-Path $target) { Remove-Item $target -Recurse -Force }
       New-Item -ItemType SymbolicLink -Path $target -Target $_.FullName | Out-Null
-    } elseif (Test-Path $target) {
-      # 更新：逐文件覆盖，命中「不覆盖清单」的本地文件保留
+    } elseif (($IncrementalSkills -contains $skillName) -and (Test-Path $target)) {
+      # 含本地数据：逐文件覆盖，保护清单内的文件
       Copy-SkillIncremental $_.FullName $target $skillName
     } else {
-      # 首次安装：整目录复制（含清单模板，供首次填写）
+      # 仓库托管：整目录替换，保证与仓库完全一致（含删除旧文件）
+      if (Test-Path $target) { Remove-Item $target -Recurse -Force }
       Copy-Item -Path $_.FullName -Destination $target -Recurse -Force
     }
     $count++
   }
+  Initialize-LocalEnv $Dest
   Write-Host "已安装 [$Name] $count 个 skill -> $Dest"
 }
 
@@ -121,3 +143,5 @@ if ($Platform -eq "all") {
 
 Write-Host ""
 Write-Host "完成。卸载只需删除上述目标目录中对应的 poc-* 目录。"
+Write-Host "说明：capabilities.yaml / deployments/ 属仓库托管，每次安装强制同步；"
+Write-Host "      本地数据仅 poc-orchestrator/env.local.yaml 与 poc-case/cases/ 两份，不会被覆盖。"

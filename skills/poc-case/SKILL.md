@@ -7,13 +7,15 @@ description: "POC 案例检索模块：在提供往期测试用例表时，确�
 
 在提供往期用例表时，对每个待测项做两件事：**是否已测过（复用）**、**是否有相近场景（种子参数）**。核心价值是「不盲目摸并发」，用历史数据降低测试成本。
 
-## 数据源（两层 + 一个模板）
+## 数据源（两层）
 
 | 文件 | 是否入仓库 | 大小量级 | 内容 | 何时读 |
 | --- | --- | --- | --- | --- |
-| `cases/index.yaml` | **否**（`.gitignore`） | ~20 KB | **第1层清单**：每个「模型+部署」一条，下挂场景档位数组，含 `seed_c`(达标档最大并发) / `passed` | **总是先读这个**，用于判 hit / near / none |
-| `cases/library/<model>__<deployment>.yaml` | **否**（`.gitignore`） | 1~20 KB/个 | **第2层明细**：该部署的完整并发扫档曲线（`points`） | **按需**，只读命中的那 1 个文件 |
-| `cases/index.example.yaml` | 是 | 3 KB | 可提交的占位示例 + 字段说明 | `index.yaml` 不存在时回退；兼作 schema 文档 |
+| `cases/index.yaml` | **否**（整个 `cases/` 目录被 `.gitignore` 排除） | ~20 KB | **第1层清单**：每个「模型+部署」一条，下挂场景档位数组，含 `seed_c`(达标档最大并发) / `passed` | **总是先读这个**，用于判 hit / near / none |
+| `cases/library/<model>__<deployment>.yaml` | **否**（同上） | 1~20 KB/个 | **第2层明细**：该部署的完整并发扫档曲线（`points`） | **按需**，只读命中的那 1 个文件 |
+
+> `cases/` 目录不存在 = 本机没有案例库 → 所有待测项直接判 `none`，从初始档开始压（不报错、不猜测）。
+> 两个文件的字段与行格式见下方说明。
 
 **读取纪律（省 token 的关键）**：
 
@@ -26,10 +28,16 @@ description: "POC 案例检索模块：在提供往期测试用例表时，确�
 ```yaml
 index:
 # [in, out, rr, slo_ttft_s, slo_tpot_ms, tool, n, seed_c, seed_tps, passed]
-- { model: "GLM-5.2", dep: glm52-1p1d, file: library/glm-5.2__glm52-1p1d.yaml }
+- model: "GLM-5.2"
+  dep: glm52-1p1d
+  file: library/glm-5.2__glm52-1p1d.yaml
   buckets:
   - [1000, 1000, 0.0, 6.0, 20.0, aisbench, 1, 96, 266.0, true]
 ```
+
+> ⚠️ 写库时注意：上例的 `model/dep/file` 必须是**块级映射**（按行展开）。
+> 不能写成 `- { model: "x", dep: y }` 再换行接 `buckets:` —— flow 映射在同一行已闭合，
+> 后面再挂块级键是**非法 YAML**，解析直接报 `Sequence item without - indicator`。
 
 ### library 文件列序（首行 `columns:` 已声明，勿猜）
 
@@ -43,7 +51,7 @@ thr=输出吞吐(tok/s) tps=单卡TPS hit=实际 prefix 命中率 ok=是否满�
 
 - 不记录任何可回溯到具体单位或个人的信息（名称、代号、编号一律不写）
 - 人名 / 工号 / SSH 账号 / 机器 IP / 内网机器名 → **一律不写**
-- 权重路径 → 不写（写 `model`，路径见 `capabilities.yaml` 的 `env.weights`）
+- 权重路径 → 不写（写 `model`，路径见 `poc-orchestrator/env.local.yaml` 的 `env.weights`）
 - 截图 / 原始 log / json → 留用户侧，不写入 skill
 - **落盘门禁**：写入前用敏感词（单位/项目名称 / 人名 / IP / 工号）反查一遍，确认零命中
 

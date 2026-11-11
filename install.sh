@@ -55,9 +55,16 @@ if [ ! -d "$SRC_DIR" ]; then
   exit 1
 fi
 
-# ---- 本地数据文件保护：更新时不覆盖这些路径，保留用户本地改动 ----
-PRESERVE_DIRS=("poc-capability/deployments" "poc-case/cases")
-PRESERVE_FILES=("poc-capability/capabilities.yaml")
+# ---- 覆盖策略 ----
+# 【仓库托管】除下面两份本地数据外，其余全部强制同步（整目录替换，含删除仓库里已移除的文件）：
+#   - poc-capability/capabilities.yaml + deployments/  → 新增模型/部署脚本靠 git pull 生效
+# 【本地数据，安装时绝不覆盖】
+#   - poc-orchestrator/env.local.yaml → 机器 IP / SSH 账号 / 权重路径 / 网卡 等私有配置
+#   - poc-case/cases/index.yaml + cases/library/ → 历史案例库
+# 仅这两个 skill 走「增量复制 + 保护」；其余走「整目录替换」。
+INCREMENTAL_SKILLS=("poc-case" "poc-orchestrator")
+PRESERVE_DIRS=("poc-case/cases/library")
+PRESERVE_FILES=("poc-case/cases/index.yaml" "poc-orchestrator/env.local.yaml")
 
 should_preserve() {
   local rel="$1"
@@ -70,19 +77,42 @@ should_preserve() {
   return 1
 }
 
+is_incremental_skill() {
+  local n="$1"
+  for s in "${INCREMENTAL_SKILLS[@]}"; do
+    if [[ "$s" == "$n" ]]; then return 0; fi
+  done
+  return 1
+}
+
 copy_incremental() {
   local src="$1" dst="$2" skill_name="$3"
+  local kept=0
   mkdir -p "$dst"
   while IFS= read -r -d '' src_file; do
     local rel="${src_file#"$src"}"
+    rel="${rel#/}"
     local full_rel="${skill_name}/${rel}"
     if should_preserve "$full_rel" && [ -e "$dst/$rel" ]; then
-      echo "  保留本地文件: $full_rel"
+      kept=$((kept + 1))
       continue
     fi
     mkdir -p "$(dirname "$dst/$rel")"
     cp "$src_file" "$dst/$rel"
   done < <(find "$src" -type f -print0)
+  if [ "$kept" -gt 0 ]; then echo "  保留本地数据 ${kept} 个文件"; fi
+}
+
+# 首次安装或本地配置缺失时，用模板生成 env.local.yaml
+init_local_env() {
+  local dest="$1"
+  [ -z "$dest" ] && return 0
+  local local_f="$dest/poc-orchestrator/env.local.yaml"
+  local example_f="$dest/poc-orchestrator/env.example.yaml"
+  if [ ! -e "$local_f" ] && [ -e "$example_f" ]; then
+    cp "$example_f" "$local_f"
+    echo "  已生成 poc-orchestrator/env.local.yaml（请填入真实机器信息；该文件不会被更新覆盖）"
+  fi
 }
 
 install_to() {
@@ -99,15 +129,17 @@ install_to() {
     if [ "$LINK" -eq 1 ]; then
       rm -rf "$dest/$name"
       ln -s "$skill" "$dest/$name"
-    elif [ -e "$dest/$name" ]; then
-      # 更新：逐文件覆盖，命中「不覆盖清单」的本地文件保留
+    elif is_incremental_skill "$name" && [ -e "$dest/$name" ]; then
+      # 含本地数据：逐文件覆盖，保护清单内的文件
       copy_incremental "$skill" "$dest/$name" "$name"
     else
-      # 首次安装：整目录复制（含清单模板，供首次填写）
+      # 仓库托管：整目录替换，保证与仓库完全一致（含删除旧文件）
+      rm -rf "$dest/$name"
       cp -R "$skill" "$dest/$name"
     fi
     count=$((count + 1))
   done
+  init_local_env "$dest"
   echo "已安装 [$platform] $count 个 skill -> $dest"
 }
 
@@ -137,3 +169,5 @@ fi
 
 echo ""
 echo "完成。卸载只需删除上述目标目录中对应的 poc-* 目录。"
+echo "说明：capabilities.yaml / deployments/ 属仓库托管，每次安装强制同步；"
+echo "      本地数据仅 poc-orchestrator/env.local.yaml 与 poc-case/cases/ 两份，不会被覆盖。"
