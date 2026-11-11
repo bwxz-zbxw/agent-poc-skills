@@ -14,8 +14,11 @@ description: "POC 性能测试分发模块（性能测试总入口）：接收�
 | aisbench_auto_tools_prefix | `poc-aisbench` | prefix_hitrate / concurrency |
 | vllm bench serve | `poc-vllmbench` | bench |
 | evalscope | `poc-evalscope` | mmbench / longbench |
-| 调参方法论（吞吐摸高） | `poc-throughput-tuning` | throughput_tap / fixed_concurrency |
+| 调参方法论（摸高 / 并发门槛） | `poc-throughput-tuning` | throughput_tap / concurrency_threshold / fixed_concurrency |
 | （新增工具） | `poc-<新工具>` | —（扩展位） |
+
+> **职责边界**：工具子 skill 只管「按给定参数执行 + 产出指标」（avg 与 p90）；**档位怎么走、rr 怎么定、拐点怎么判全部归 `poc-throughput-tuning`**。
+> 因此 `mode=concurrency`（aisbench 并发门槛）时，实际是「aisbench 执行 + throughput-tuning 决策」两者配合。
 
 ## 输入契约
 

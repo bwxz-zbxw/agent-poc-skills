@@ -1,6 +1,6 @@
 ---
 name: "poc-throughput-tuning"
-description: "吞吐摸高调优子 skill：在给定时延内摸高吞吐的调参方法论——允许/不允许调 rr 两类场景的摸高流程、拐点判定、rr 设定，以及固定并发长跑。当需求是给定时延摸高吞吐、需要找最优并发与 rr 时使用。"
+description: "调参方法论子 skill：在给定时延内摸高吞吐 / 找并发门槛的完整调参逻辑——允许与不允许调 rr 两类摸高流程、并发门槛（rr 固定只调并发）、固定并发长跑、拐点判定、rr 设定与超限容差。当需要决定并发档位怎么走、rr 怎么设、或判定拐点/达标时使用（工具 skill 只执行参数、不做调参决策）。"
 ---
 
 # 吞吐摸高调优子 Skill
@@ -14,6 +14,7 @@ description: "吞吐摸高调优子 skill：在给定时延内摸高吞吐的调
 | A. 给定时延摸高吞吐（允许调 rr） | 可改请求频率 rr | 走「允许调 rr」流程 |
 | B. 给定时延摸高吞吐（不允许调 rr） | rr 固定 | 走「不允许调 rr」流程 |
 | C. 固定并发长跑 | 并发固定 | 服务化脚本备好后写 sh 脚本挂长跑摸测 |
+| D. 给定时延找「并发门槛」（rr 固定 2.0） | 需求是"多少并发还能达标" | 走「并发门槛」流程 |
 
 ## 流程 A · 允许调 rr
 
@@ -22,7 +23,7 @@ description: "吞吐摸高调优子 skill：在给定时延内摸高吞吐的调
    - (2) 增大并发后吞吐不升反降（拐点）
 2. **拐点确认**：
    - 情况 (2) 要注意性能波动，建议在拐点处**多测两次**确认
-   - 拐点典型特征：TPOT 的 **p90 / p99 时延突变、TPOT 更离散**
+   - 拐点典型特征：TPOT 的 **p90 突变、TPOT 更离散**（若用 vllmbench 且已登记 p99，可一并参考）
 3. **停顿点后处理**（(1)(2) 相同）：
    - TTFT 未超限制（或超限 ≤1s）→ 登记数据交差
    - TTFT 超限制 >1s → 通过**调 rr 降低 ttft**
@@ -40,6 +41,18 @@ description: "吞吐摸高调优子 skill：在给定时延内摸高吞吐的调
 
 服务化脚本准备就绪后，写 sh 脚本挂长跑摸测即可（无需动态调并发/rr）。
 
+## 流程 D · 并发门槛（rr 固定 2.0，只调并发 J）
+
+用于 aisbench 的 `concurrency` 模式：目标是确定「某长度档下还能达标的并发是多少」。
+
+1. **rr 固定 2.0，只调最大并发 J**（rr 从 2 到 256 对 TTFT 几乎无影响）；总请求数 `K = 4J` 跟随
+2. **离散档位打点**：按档位递增 J（例如 80 → 128 → 132 → 136 → 144 → 160）逼近门槛；
+   用「超限档」对照确认最优档（最后达标档 = 最优档，下一档 = 超限对照）
+3. **TPOT 约束换算**：需求「20 tps」等价于 `(输出总吞吐 ÷ J) ≥ 20 tok/s`（即 TPOT ≤ 50ms）；
+   TPOT 随 J 增大而增大，**降低 J** 即可满足 TPOT
+4. **每档独立 OUTPUT_DIR + 独立日志**，便于对照留档
+5. **PD 分离一律走代理 / LB 入口**（不只高并发；直连单 P 会因 prefill 队列过载使 TTFT 剧增），详见 `poc-aisbench` 坑清单
+
 ## 合格容差（略超限判合格）
 
 TTFT / TPOT 略超目标阈值时，达到以下容差即可判合格登记，无需继续调优或多测：
@@ -54,7 +67,7 @@ TTFT / TPOT 略超目标阈值时，达到以下容差即可判合格登记，�
 ```json
 {
   "task_id": "task_16k_tap",
-  "demand_type": "throughput_tap",     // throughput_tap | fixed_concurrency
+  "demand_type": "throughput_tap",     // throughput_tap | concurrency_threshold | fixed_concurrency
   "rr_adjustable": true,               // 是否允许调 rr
   "thresholds": { "ttft_s": 6.0, "tpot_ms": 50 },
   "seed_params": { "concurrency": 128 }
@@ -68,20 +81,25 @@ TTFT / TPOT 略超目标阈值时，达到以下容差即可判合格登记，�
   "task_id": "task_16k_tap",
   "status": "pass",
   "best_params": { "concurrency": 132, "request_rate": 2.4 },
-  "metrics": { "ttft_avg": 5.8, "tpot_avg": 48, "throughput": 3200 },
+  "best_metrics": { "ttft_avg": 5.8, "ttft_p90": 6.4, "tpot_avg": 48, "tpot_p90": 52, "throughput": 3200 },
+  "image": "i16",
   "notes": "并发132为拐点；rr=2.4 将 ttft 压回限制内"
 }
 ```
 
+> 指标只登记 **avg + p90**；`image` 为 case 库 `images:` 字典的 iNN（保证该档可复现）。
+
 ## 坑清单
 
 1. 拐点处性能波动大 → 多测两次，勿凭单次数据定拐点
-2. 拐点常伴随 TPOT p90/p99 突变、更离散 → 作为拐点辅助判据
+2. 拐点常伴随 TPOT p90 突变、更离散 → 作为拐点辅助判据
 3. rr=0 时未观察最高 rps → 用汇总表吞吐 ×1.2 兜底设 rr
 4. 摸并发阶段「先不看 ttft」，避免被 ttft 干扰而过早停住
+5. 流程 D 里 rr 固定 2.0 时，别拿 rr 去调 TTFT —— 该流程只动并发，TTFT 超限就降 J 或换入口
 
 ## 完成判据
 
-- [ ] 找到最优并发（或拐点）与 rr（如需）
-- [ ] TTFT/TPOT 达标对照清晰，最优参数已登记
+- [ ] 找到最优并发（或拐点）与 rr（如需），并说明属于 A/B/C/D 哪种流程
+- [ ] TTFT/TPOT（avg + p90）达标对照清晰，最优参数已登记
 - [ ] 拐点若出现已多测确认
+- [ ] 最优档使用的镜像（`image` = iNN）已登记

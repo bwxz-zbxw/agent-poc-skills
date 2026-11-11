@@ -58,12 +58,12 @@ vllm bench serve --backend openai-chat --base-url http://<HOST>:<PORT> \
 
 1. **固定 max concurrency 与总请求，调 `request_rate`（初值 ~2.0）逼近 TTFT 门槛**
 2. TPOT 随 J 增大而增大；若 20tps 不达标，**降低 J** 以提升 `输出总吞吐 ÷ J`
-3. 高并发务必走**代理端口**（如 12321/3999），避免直连 P 节点 9000 导致 TTFT 恶化
+3. **PD 分离一律走代理端口**（如 12321/3999，或 `deploy.yaml` 的 `proxy.port`），不只高并发；直连 P 节点 9000 会导致 TTFT 恶化
 4. 日志含实测数据，**保留勿删**；结果目录独立，防互覆盖
 
 ## 坑清单
 
-1. 直连 P 节点高并发 → TTFT 剧增，必须走代理口
+1. PD 分离直连 P 节点（无论并发大小）→ TTFT 剧增，必须走代理口
 2. 长度超限 → 写 `max_seq_length=1048576`（1M 输入场景另注意 1048480 上限放大）
 3. 交互 shell `LD_PRELOAD=libjemalloc` 致崩溃 → 非交互启动
 4. 用户名/卡冲突 → 测前 `npu-smi info` 确认

@@ -26,18 +26,34 @@ description: "POC 案例检索模块：在提供往期测试用例表时，确�
 ### index.yaml 行格式（定长数组，省掉重复 key）
 
 ```yaml
+# 顶部 images: 镜像索引（iNN -> 全名 + 是否可公开拉取）
+images:
+  i16: { tag: "quay.io/ascend/vllm-ascend:v0.30.0rc2-a5-openeuler", public: true }
+  i17: { tag: "vllm-ascend:dev-26.1.0.day20260817-A5-py311-openEuler24.03-lts-aarch64", public: false }
+
 index:
-# [in, out, rr, slo_ttft_s, slo_tpot_ms, tool, n, seed_c, seed_tps, passed]
+# [in, out, rr, slo_ttft_s, slo_tpot_ms, tool, n, seed_c, seed_tps, passed, img]
 - model: "GLM-5.2"
   dep: glm52-1p1d
   file: library/glm-5.2__glm52-1p1d.yaml
   buckets:
-  - [1000, 1000, 0.0, 6.0, 20.0, aisbench, 1, 96, 266.0, true]
+  - [1000, 1000, 0.0, 6.0, 20.0, aisbench, 1, 96, 266.0, true, i16]
 ```
 
 > ⚠️ 写库时注意：上例的 `model/dep/file` 必须是**块级映射**（按行展开）。
 > 不能写成 `- { model: "x", dep: y }` 再换行接 `buckets:` —— flow 映射在同一行已闭合，
 > 后面再挂块级键是**非法 YAML**，解析直接报 `Sequence item without - indicator`。
+
+### 镜像登记（复现的关键）
+
+每条 case 都必须能查到"当时用的什么镜像"，否则无法复现。为避免每行重复长字符串：
+
+- **`index.yaml` 顶部 `images:` 字典**存 `iNN → {tag, public}`，行里只写 `img: iNN`；
+- `public: true` → 可直接 `docker pull`；`public: false` → 内部构建/私有仓库，**复现时需换成可获取的等价镜像**；
+- 一个场景档位内若用过多个镜像：`img` 取众数，另附 `imgs: [i10, i11]` 列出全部；
+- **新增 case 时必填 `img`**：镜像不在字典里就先加字典项再引用。
+
+复现流程：读 case 的 `img` → 查 `images[img].tag` → `public=false` 则先找等价公开镜像 → 按 `deployments/<dep>/` 起服务。
 
 ### library 文件列序（首行 `columns:` 已声明，勿猜）
 
@@ -46,6 +62,8 @@ index:
 ```
 c=并发 k=总请求 req=request_rate ttft/tpot=ms(avg) ttft90/tpot90=ms(p90)
 thr=输出吞吐(tok/s) tps=单卡TPS hit=实际 prefix 命中率 ok=是否满足该场景时延门槛
+
+> library 里的 `buckets[].img` 与 index 用同一套 `iNN` 编号，无需重复长名。
 
 ### 隐私铁律（写库前必查）
 

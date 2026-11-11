@@ -31,14 +31,31 @@ description: "POC 能力确认模块：校验「模型+部署方式」是否在�
 ## 输入契约
 
 ```json
-{ "model": "DeepSeek-V4-Flash-0731", "deployment": "PD分离", "mode": "3p1d" }
+{
+  "model": "DeepSeek-V4-Flash-0731",
+  "deployment": "PD分离",
+  "cards": 16,            // 【必填】总卡数：同模型同部署方式可能有多套卡数，必须区分
+  "mode": "3p1d",         // 可选；不提供则在该 model+deployment+cards 下唯一确定
+  "p_cards": 12,          // 可选；PD 分离时用于二次校验
+  "d_cards": 4
+}
 ```
 
 ## 匹配规则
 
-1. 按 `model` + `deployment`（可选 `mode`）精确匹配清单。
-2. 命中 → 返回该组合可用的 `tools` 列表、`deploy_dir`（部署脚本与镜像版本位置）、`served_model_name`，供阶段 ③ 查阅/拉起服务。
-3. 未命中 → **返回不可测结论，并向用户明确说明**「该模型/部署方式在当前 skill 中暂无记录」，询问是否需要新增（不硬测、不猜测）。
+匹配键 = `model` + `deployment` + **`cards`**（+ 可选 `mode` / `p_cards` / `d_cards`）。
+
+1. **先按 model + deployment 过滤**，拿到候选条目。
+2. **再按 cards 区分**：清单里同一 model+deployment 可能有多条（不同总卡数，例如
+   `DeepSeek-V4-Flash-0731 / 独立部署` 就有 4 卡与 8 卡两套；`Qwen3.8-27B / 独立部署` 有 2 卡与 4 卡；
+   `Qwen3.6-27B / 独立部署` 有 1 卡与 2 卡）。
+   - `cards` 命中唯一一条 → 返回该条；
+   - `cards` 命中多条（且未给 mode）→ 把这些条目的 `mode` 列出来让用户选，**不猜**；
+   - `cards` 与清单都不一致 → **判不可测**，并列出「清单里该模型部署方式支持哪些卡数」（如 `1卡 / 2卡`），询问是否新增。
+3. **`cards` 缺失时不允许直接命中**：必须先把该 model+deployment 支持的卡数列表返回给用户，要求补齐后再匹配。
+   （否则 16 卡的 `1p1d` 会静默命中 8 卡 `1p1d` —— 这是必须避免的假命中。）
+4. 命中 → 返回 `tools`、`deploy_dir`、`served_model_name`、`cards` / `p_cards` / `d_cards`、`image`，供阶段 ③ 使用。
+5. 未命中 → **返回不可测结论**，明确说明「该模型/部署方式/卡数组合暂无记录」，询问是否新增（不硬测、不猜测）。
 
 ## 环境信息清单（能力确认时校验）
 
@@ -68,9 +85,13 @@ description: "POC 能力确认模块：校验「模型+部署方式」是否在�
   "supported": true,
   "model": "DeepSeek-V4-Flash-0731",
   "deployment": "PD分离",
+  "cards": 16,
   "mode": "3p1d",
+  "p_cards": 12,
+  "d_cards": 4,
   "served_model_name": "dsv",
   "deploy_dir": "./deployments/dsv4-flash-0731-3p1d/",
+  "image": { "vllm_version": "v0.27.1", "container": "poc-dsv4-flash-0731-3p1d", "image_tag": "" },
   "tools": [
     { "skill": "poc-aisbench", "modes": ["prefix_hitrate", "concurrency"] },
     { "skill": "poc-vllmbench", "modes": ["bench"] },
@@ -79,7 +100,7 @@ description: "POC 能力确认模块：校验「模型+部署方式」是否在�
 }
 ```
 
-`supported: false` 时附带 `reason`，并提示用户确认是否扩充 `capabilities.yaml` 与新增 `deployments/` 部署目录。
+`supported: false` 时附带 `reason`（必须写清"该 model+deployment 支持哪些卡数"），并提示用户确认是否扩充 `capabilities.yaml` 与新增 `deployments/` 部署目录。
 
 ## 危险动作
 
@@ -87,7 +108,8 @@ description: "POC 能力确认模块：校验「模型+部署方式」是否在�
 
 ## 完成判据
 
-- [ ] 每个「模型×部署方式」组合都给出 可测 / 不可测 明确结论
-- [ ] 命中项已返回部署脚本位置、镜像版本与可用工具
+- [ ] 每个待测项都按 **model + deployment + cards**（+ mode）给出 可测 / 不可测 明确结论
+- [ ] **没有发生卡数假命中**：`cards` 缺失时已反问，未用其他卡数的条目顶替
+- [ ] 命中项已返回部署脚本位置、镜像版本、卡分配与可用工具
 - [ ] `poc-orchestrator/env.local.yaml` 五类环境信息（IP / SSH 账号 / 权重路径 / 工作目录 / 通信网卡）已校验，缺失项已反问补齐
 - [ ] 不可测项已向用户说明并询问，未擅自测试

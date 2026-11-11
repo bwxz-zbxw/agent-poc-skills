@@ -1,6 +1,6 @@
 ---
 name: "poc-aisbench"
-description: "aisbench_auto_tools_prefix 压测子 skill：prefix cache 命中率与并发门槛两类测试，产出 TTFT/TPOT/吞吐/命中率指标。当主控路由到此工具、或用户直接要求跑 aisbench 压测 / prefix cache / 并发达标测试时使用。"
+description: "aisbench_auto_tools_prefix 压测执行子 skill：按给定参数跑 prefix cache 命中率与并发门槛两类测试，产出 TTFT/TPOT 的 avg 与 p90、吞吐、实际命中率。只管执行与取数，调参（档位/rr/拐点）由 poc-throughput-tuning 负责。"
 ---
 
 # aisbench 压测子 Skill
@@ -43,7 +43,8 @@ pip3 install -e ./ --use-pep517 && pip3 install -r requirements/api.txt -r requi
 
 - `OUTPUT_DIR`：每场景独立目录（如 `./outputs/task_16k_J128`），防互覆盖
 - `HOST_IP`：执行测试命令的本机实际 IP（不能写 127.0.0.1）
-- `HOST_PORT`：请求入口 —— 9000 直连 P / 代理口（1P1D DP 代理口 12321 等 / 3999 proxy）；**高并发必须走代理口**
+- `HOST_PORT`：请求入口 —— **PD 分离一律走代理 / LB 口**（1P1D DP 代理口 12321 等 / 3999 proxy / deploy.yaml 的 `proxy.port`）；
+  只有**非 PD 的单机部署**才直连服务端口（如 9000）。代理口与 `deploy.yaml` 的 `test_convention.proxy_port` 保持一致。
 - `POD_INFO`：各节点 metrics 端口列表（命中率统计用）
 - `MODEL_NAME`、`MODEL_PATH`、`DATASET_PATH`、`WORK_PATH`、`API_KEY`
 
@@ -95,19 +96,19 @@ python3 aisbench_test.py --input_len <L> --output_len <O> --data_num <K> --concu
 - `<场景>.log`、`aisbench.log` / `aisbench_all.log`
 - 明细 JSON：`outputs/<OUTPUT_DIR>/<exp时间戳>/performances/vllm-api-stream-chat/gsm8kdataset_details.json`
 
-提取：
-- **TTFT avg/median/p90/p99**：主日志汇总段，或明细 JSON 的 `prefill_latency`
+提取（**只要 avg 与 p90，不取 p99**）：
+- **TTFT avg / p90**：主日志汇总段，或明细 JSON 的 `prefill_latency`
+- **TPOT avg / p90**：同上
 - **实际命中率**：`grep -A 20 "Prefix cache hit detail" aisbench.log`，**第二张表**为正式测试后快照（首张为预热后快照）
-- **TPOT / 输出吞吐 / 单卡吞吐**（总吞吐 ÷ npu_num）/ **成功率**
+- **输出吞吐 / 单卡吞吐**（总吞吐 ÷ npu_num）/ **成功率**
 - 命中率略低于目标（如 93.7% vs 95%）由固定前缀+随机尾缀+块边界导致，属工具正常偏差
 
-## 调参（摸 TTFT/TPOT 门槛）
+> 每档测试用独立 `OUTPUT_DIR` + 独立日志，便于对照留档。
 
-1. **rr 固定 2.0，只调最大并发 J**（rr 2→256 对 TTFT 几乎无影响），K=4J 跟随
-2. **离散档位打点**：按档位递增 J（如 80→128→132→136→144→160）逼近门槛，用「超限档」对照确认最优档
-3. **TPOT 约束换算**：需求「20tps」等价于 `(输出总吞吐 ÷ J) ≥ 20 tok/s`（即 TPOT ≤ 50ms）；TPOT 随 J 增大而增大，降低 J 可满足
-4. **高并发必须走代理入口**：直连 P 节点 9000 会因 prefill API 队列过载导致 TTFT 剧增（6.3s→145.6s 量级）
-5. 每档独立 OUTPUT_DIR + 独立日志，便于对照留档
+## 调参
+
+**不在本 skill**。调参方法论（并发/rr 决策、拐点判定、超限容差）由 `poc-throughput-tuning` 负责；
+本 skill 只按传入的 `concurrency` / `request_rate` 执行并产出指标，不自行决定档位怎么走。
 
 ## 坑清单
 
@@ -118,7 +119,7 @@ python3 aisbench_test.py --input_len <L> --output_len <O> --data_num <K> --concu
 5. 卡被他人占用 → 测前 `npu-smi info`，占满需用户确认
 6. 脚本 CRLF 行尾 → `sed -i 's/\r$//'`
 7. 1M 输入写 1048576 → 400；取 1048480
-8. 直连 P 9000 高并发 → TTFT 恶化，走代理口
+8. PD 分离直连 P 9000（**任何并发都不行**）→ TTFT 恶化（prefill 队列过载），必须走代理 / LB 口
 9. 漏 `--dp 4` → 命中率 ~25%
 10. `HOST_IP` 写 127.0.0.1 → 失败；写执行机实际 IP
 11. 宿主机跑 aisbench → 缺依赖失败；必须在容器内
@@ -130,15 +131,19 @@ python3 aisbench_test.py --input_len <L> --output_len <O> --data_num <K> --concu
 {
   "task_id": "task_16k_J128",
   "status": "pass",
-  "metrics": { "ttft_avg": 4.2, "ttft_p99": 6.1, "tpot_avg": 31, "hit_rate": 0.937, "throughput": 3120 },
+  "metrics": { "ttft_avg": 4.2, "ttft_p90": 5.6, "tpot_avg": 31, "tpot_p90": 36, "hit_rate": 0.937, "throughput": 3120, "per_card_tps": 195.0 },
+  "image": "i16",
   "artifacts": ["./outputs/task_16k_J128/details.json", "./run_16k_J128.log"],
   "notes": "命中率 93.7% 略低于 95%，属正常偏差"
 }
 ```
 
+> `metrics` 只登记 **avg + p90**（aisbench 不取 p99）；`image` 为本次所用镜像在 case 库 `images:` 字典中的编号，供阶段④登记与后续复现。
+
 ## 完成判据
 
 - [ ] 每场景成功率 100%（失败先排查 500/错误，必要时重试或上报）
-- [ ] TTFT/TPOT 达标，记录最优档 J 与超限对照档
+- [ ] TTFT / TPOT 的 **avg 与 p90** 已提取（不取 p99）
 - [ ] 命中率已记录（目标 vs 实测）
+- [ ] 所用镜像已登记（`image` = case 库 `images:` 的 iNN）
 - [ ] 日志与明细 JSON 已保留
